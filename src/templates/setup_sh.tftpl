@@ -1,0 +1,59 @@
+#!/bin/bash -xeu
+
+echo "#########################################################################################"
+echo "#                       Stating Installing Docker                                       #"
+echo "#########################################################################################"
+curl -fsSL https://get.docker.com -o get-docker.sh
+sh get-docker.sh
+
+curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+
+usermod -a -G docker ${USER}
+newgrp docker
+
+systemctl enable docker.service
+systemctl enable containerd.service
+
+docker -v
+docker-compose -v
+
+echo "#########################################################################################"
+echo "#                    Configuring SO File Descriptors                                    #"
+echo "#########################################################################################"
+
+sysctl -w vm.max_map_count=524288
+sysctl -w fs.file-max=131072
+ulimit -n 131072
+ulimit -u 8192
+
+echo "#########################################################################################"
+echo "#                         Starting Applications                                         #"
+echo "#########################################################################################"
+
+docker volume create --name sonarqube_data
+docker volume create --name sonarqube_logs
+docker volume create --name sonarqube_extensions
+
+docker run -d --name sonarqube --restart=unless-stopped \
+    -p 9000:9000 \
+    -e SONAR_JDBC_URL="${SONAR_JDBC_URL}" \
+    -e SONAR_JDBC_USERNAME="${SONAR_JDBC_USERNAME}" \
+    -e SONAR_JDBC_PASSWORD="${SONAR_JDBC_PASSWORD}" \
+    -v sonarqube_data:/opt/sonarqube/data \
+    -v sonarqube_extensions:/opt/sonarqube/extensions \
+    -v sonarqube_logs:/opt/sonarqube/logs \
+    --network host \
+    "${SONARQUBE_IMAGE}"
+
+mkdir -p ./nginx/ssl
+echo "${NGINX_CONF}" | base64 --decode > ./nginx/default.conf
+echo "${NGINX_SSL_PRIVATE_KEY}" | base64 --decode > ./nginx/ssl/privkey.pem
+echo "${NGINX_SSL_PUBLIC_KEY}" | base64 --decode > ./nginx/ssl/cert.pem;
+
+docker run -d --name nginx --restart=unless-stopped \
+  -v /nginx/default.conf:/etc/nginx/conf.d/default.conf:ro \
+  -v /nginx/ssl:/etc/nginx/certs:ro \
+  -p 80:80 -p 443:443 \
+  --network host \
+  "${NGINX_IMAGE}"
