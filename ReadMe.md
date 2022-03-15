@@ -2,6 +2,8 @@
 
 This project intends to provision all underline infrastructure for [Sonarqube](https://www.sonarqube.org/) application. The infrastructure aims to be reliable and stable, perfect to run in a production ready environment.
 
+![Architecture](./artifacts/architecture.jpg)
+
 ## Before Beginning
 ---
 
